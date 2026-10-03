@@ -46,8 +46,7 @@ if (IS_PROD) {
     process.exit(1);
   }
   if (!process.env.CLIENT_URL) {
-    console.error('[config] FATAL: CLIENT_URL must be set in production (your frontend origin, e.g. https://pulse.vercel.app).');
-    process.exit(1);
+    console.warn('\n[config] WARNING: CLIENT_URL is not set. CORS will block your frontend until you set it (e.g. https://pulse.vercel.app).\n');
   }
 }
 

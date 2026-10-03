@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { authService } from '../services/authService';
+import { login as loginRequest, signup as signupRequest } from '../api/config';
 import type { LoginPayload, SignupPayload, SignupResponse, User } from '../types';
 import { isJwtExpired } from '../utils/format';
 
@@ -24,13 +24,13 @@ export const useAuthStore = create<AuthState>()(
       user: null,
 
       login: async (payload) => {
-        const { token, user } = await authService.login(payload);
+        const { token, user } = await loginRequest(payload);
         if (!token) throw new Error('Login succeeded but no token was returned by the server.');
         set({ token, user });
         return user;
       },
 
-      signup: (payload) => authService.signup(payload),
+      signup: (payload) => signupRequest(payload),
 
       logout: () => set({ token: null, user: null }),
 

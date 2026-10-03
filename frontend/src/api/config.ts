@@ -1,7 +1,18 @@
-import type { ApiErrorBody } from '../types';
+import type {
+  ApiErrorBody,
+  AuthResponse,
+  LoginPayload,
+  SignupPayload,
+  SignupResponse,
+  User,
+} from '../types';
 
-export const API_BASE_URL: string =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000/api';
+/**
+ * Backend origin, e.g. https://pulse-api.onrender.com (no trailing slash, no /api).
+ * Set VITE_API_URL in Vercel. Production builds fail without it (see vite.config.ts).
+ * Empty in dev → same-origin requests that go through the Vite `/api` proxy.
+ */
+export const API_URL = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
 
 export class ApiError extends Error {
   readonly status: number;
@@ -94,7 +105,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
+    res = await fetch(`${API_URL}/api${path}`, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -103,7 +114,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
     throw new ApiError(
-      'Unable to reach the server. Make sure the backend is running on port 5000.',
+      import.meta.env.DEV
+        ? 'Unable to reach the server. Make sure the backend is running on port 5000.'
+        : 'Unable to reach the server. Please check your connection and try again.',
       0,
     );
   }
@@ -123,4 +136,19 @@ export function getErrorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
   return 'Something went wrong.';
+}
+
+/* ───────────── Auth endpoints ───────────── */
+
+export function signup(data: SignupPayload): Promise<SignupResponse> {
+  return apiRequest<SignupResponse>('/auth/signup', { method: 'POST', body: data, auth: false });
+}
+
+export function login(data: LoginPayload): Promise<AuthResponse> {
+  return apiRequest<AuthResponse>('/auth/login', { method: 'POST', body: data, auth: false });
+}
+
+export async function getProfile(): Promise<User> {
+  const { user } = await apiRequest<{ user: User }>('/auth/me');
+  return user;
 }

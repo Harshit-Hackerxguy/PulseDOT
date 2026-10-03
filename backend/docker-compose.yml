@@ -1,3 +1,6 @@
+# LOCAL DEVELOPMENT ONLY — not a production deployment.
+# Values can be overridden from the shell or a backend/.env file, e.g.
+#   JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
 services:
   # PostgreSQL database
   db:
@@ -5,26 +8,29 @@ services:
     container_name: spotify_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: spotify_clone
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-spotify_clone}
     ports:
-      - "5432:5432"
+      # Bound to localhost so the dev database isn't exposed on your network.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Runs only when the volume is empty. The API also applies schema.sql on boot.
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d spotify_clone"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-spotify_clone}"]
       interval: 5s
       timeout: 5s
       retries: 10
     networks:
       - spotify_network
 
-  # Node.js / Express API
+  # Node.js / Express API (hot-reload dev image)
   api:
-    build: .
+    build:
+      context: .
+      target: dev
     container_name: spotify_api
     restart: unless-stopped
     ports:
@@ -33,10 +39,10 @@ services:
       PORT: 5000
       NODE_ENV: development
       # Inside Docker the hostname is the service name "db", NOT localhost.
-      DATABASE_URL: postgresql://postgres:password@db:5432/spotify_clone
-      JWT_SECRET: super_secret_jwt_key_change_me
-      JWT_EXPIRES_IN: 7d
-      CLIENT_URL: http://localhost:5173
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-spotify_clone}
+      JWT_SECRET: ${JWT_SECRET:-dev_only_insecure_secret_do_not_use_in_production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
     volumes:
       # Live-reload: tsx watch picks up edits made on the host.
       - ./src:/app/src

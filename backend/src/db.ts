@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Pool, QueryResultRow } from 'pg';
+import { Pool, PoolConfig, QueryResultRow } from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -10,9 +10,24 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
+/**
+ * TLS for hosted Postgres (Neon, Supabase, Render external URLs, RDS…).
+ *   DATABASE_SSL unset      → whatever DATABASE_URL says (e.g. ?sslmode=require), else no TLS
+ *   DATABASE_SSL=true       → TLS with certificate verification
+ *   DATABASE_SSL=no-verify  → TLS without verification (providers using self-signed certs)
+ * Render's *internal* database URL does not need TLS.
+ */
+function sslConfig(): PoolConfig['ssl'] {
+  const mode = process.env.DATABASE_SSL?.trim().toLowerCase();
+  if (mode === 'true' || mode === 'require') return { rejectUnauthorized: true };
+  if (mode === 'no-verify') return { rejectUnauthorized: false };
+  return undefined;
+}
+
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 10,
+  ssl: sslConfig(),
+  max: Number(process.env.DATABASE_POOL_MAX) || 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
 });

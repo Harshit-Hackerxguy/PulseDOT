@@ -1,0 +1,34 @@
+# Render Blueprint — provisions the API + PostgreSQL in one go.
+# Render dashboard → New → Blueprint → select this repo.
+# After the first deploy, set CLIENT_URL to your Vercel URL (it is marked sync:false).
+services:
+  - type: web
+    name: pulse-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    # Only redeploy when backend files change.
+    buildFilter:
+      paths:
+        - backend/**
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pulse-db
+          property: connectionString # internal URL — no TLS needed
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CLIENT_URL
+        sync: false # e.g. https://pulse.vercel.app (comma-separate multiple origins)
+
+databases:
+  - name: pulse-db
+    plan: free
+    databaseName: spotify_clone
+    user: pulse

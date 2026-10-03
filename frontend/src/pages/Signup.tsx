@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { Alert } from '../components/ui/Alert';
 import { FormField } from '../components/ui/FormField';
-import { getErrorMessage } from '../lib/api';
+import { getErrorMessage } from '../api/config';
 import { useAuthStore } from '../store/useAuthStore';
 import type { RequestStatus, SignupPayload } from '../types';
 

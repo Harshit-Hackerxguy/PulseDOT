@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
-import { configureApi } from './lib/api';
+import { configureApi } from './api/config';
 import { useAuthStore } from './store/useAuthStore';
 
 // Wire the API client to the auth store (token injection + auto-logout on 401).

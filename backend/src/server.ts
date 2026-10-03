@@ -1,5 +1,7 @@
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
@@ -9,18 +11,44 @@ dotenv.config();
 
 /* ─────────────────────────────── Config ─────────────────────────────── */
 
+const IS_PROD = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT) || 5000;
 const HOST = '0.0.0.0'; // REQUIRED inside Docker — 127.0.0.1 is unreachable from the host.
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const CLIENT_URLS = (process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',')
-  .map((url) => url.trim())
+  .map((url) => url.trim().replace(/\/+$/, '')) // browsers send Origin without a trailing slash
   .filter(Boolean);
+
+/**
+ * Number of reverse proxies in front of the app (Render, Railway, Fly, Nginx…).
+ * Needed so req.ip — and therefore rate limiting — sees the real client IP.
+ * Defaults to 1 in production, disabled in development.
+ */
+const TRUST_PROXY = ((): number | boolean => {
+  const raw = process.env.TRUST_PROXY?.trim();
+  if (!raw) return IS_PROD ? 1 : false;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : false;
+})();
 
 if (!JWT_SECRET) {
   console.error('[config] FATAL: JWT_SECRET is not set.');
   process.exit(1);
+}
+
+if (IS_PROD) {
+  if (JWT_SECRET.length < 32) {
+    console.error('[config] FATAL: JWT_SECRET must be at least 32 characters in production (openssl rand -hex 32).');
+    process.exit(1);
+  }
+  if (!process.env.CLIENT_URL) {
+    console.error('[config] FATAL: CLIENT_URL must be set in production (your frontend origin, e.g. https://pulse.vercel.app).');
+    process.exit(1);
+  }
 }
 
 /* ─────────────────────────────── Types ──────────────────────────────── */
@@ -86,6 +114,8 @@ function authenticate(req: AuthedRequest, res: Response, next: NextFunction): vo
 
 const app = express();
 
+app.set('trust proxy', TRUST_PROXY);
+app.use(helmet());
 app.use(
   cors({
     origin: CLIENT_URLS,
@@ -94,15 +124,26 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '100kb' }));
 
 // Tiny request logger — useful when debugging through `docker compose logs -f api`.
+// Health checks are skipped so platform probes don't flood the logs.
 app.use((req, res, next) => {
+  if (req.path === '/health') return next();
   const start = Date.now();
   res.on('finish', () => {
     console.log(`${req.method} ${req.originalUrl} → ${res.statusCode} (${Date.now() - start}ms)`);
   });
   next();
+});
+
+/** Brute-force protection for credential endpoints: 20 attempts / 15 min / IP. */
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please wait a few minutes and try again.' },
 });
 
 /* ─────────────────────────────── Routes ─────────────────────────────── */
@@ -113,6 +154,7 @@ app.get('/health', (_req, res) => {
 
 app.post(
   '/api/auth/signup',
+  authLimiter,
   asyncHandler(async (req, res) => {
     const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
@@ -162,6 +204,7 @@ app.post(
 
 app.post(
   '/api/auth/login',
+  authLimiter,
   asyncHandler(async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
@@ -219,7 +262,7 @@ app.use((err: Error & { status?: number; type?: string }, _req: Request, res: Re
   }
   console.error('[error]', err);
   res.status(err.status || 500).json({
-    message: process.env.NODE_ENV === 'production' ? 'Internal server error.' : err.message,
+    message: IS_PROD ? 'Internal server error.' : err.message,
   });
 });
 

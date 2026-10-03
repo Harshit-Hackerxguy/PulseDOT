@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # The Node.js Backend API
+  api:
+    build: .
+    container_name: spotify_api
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DATABASE_URL=postgresql://postgres:password@db:5432/spotify_clone
+      - JWT_SECRET=super_secret_jwt_key
+      - CLIENT_URL=http://localhost:5173
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - spotify_network
+
+  # The PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: spotify_db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=spotify_clone
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Mount the schema.sql so Postgres creates tables automatically on first run
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d spotify_clone"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spotify_network
+
+volumes:
+  pgdata: # Creates a persistent volume so DB data survives container restarts
+
+networks:
+  spotify_network:
+    driver: bridge

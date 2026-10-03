@@ -1,4 +1,4 @@
-# 🎵 Pulse .
+# 🎵 Pulse.
 
 A full-stack Spotify clone featuring a beautiful, modern, and responsive user interface with a robust backend architecture.
 

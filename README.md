@@ -1,4 +1,4 @@
-# 🎵 MyownSpotify
+# 🎵 Pulse .
 
 A full-stack Spotify clone featuring a beautiful, modern, and responsive user interface with a robust backend architecture.
 
@@ -40,7 +40,7 @@ A full-stack Spotify clone featuring a beautiful, modern, and responsive user in
 1. **Clone the repository**
    ```bash
    git clone <your-repo-url>
-   cd MyownSpotify
+   cd PulseDOT
    ```
 
 2. **Setup Backend**
